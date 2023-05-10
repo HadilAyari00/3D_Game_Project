@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Babylon.js Game Prototype</title>
+    <style>
+      html,
+      body {
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      #renderCanvas {
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+      }
+    </style>
+    <script src="https://code.jquery.com/pep/0.4.3/pep.js"></script>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <script src="https://cdn.babylonjs.com/cannon.js"></script>
+
+    <script src="https://preview.babylonjs.com/gui/babylon.gui.min.js"></script>
+  </head>
+
+  <body>
+    <canvas id="renderCanvas"></canvas>
+    <div
+      id="loadingScreen"
+      style="
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      "
+    >
+      <h1 style="color: white">Loading...</h1>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("renderCanvas");
+      const engine = new BABYLON.Engine(canvas, true);
+
+      let player;
+      const projectiles = [];
+      const enemies = [];
+
+      const createPlayer = async function (scene) {
+        const result = await BABYLON.SceneLoader.ImportMeshAsync(
+          "",
+          "./models/ufo/",
+          "baby_cute_alien.glb",
+          scene
+        );
+        const root = new BABYLON.TransformNode("root", scene);
+        const rotationQuaternion = new BABYLON.Quaternion();
+        BABYLON.Quaternion.RotationAxisToRef(
+          BABYLON.Axis.Y,
+          BABYLON.Tools.ToRadians(90),
+          rotationQuaternion
+        );
+        result.meshes.forEach((mesh) => {
+          mesh.parent = root;
+          mesh.scaling = new BABYLON.Vector3(0.75, 0.75, 0.75);
+          mesh.rotate(BABYLON.Axis.X, BABYLON.Tools.ToRadians(-90));
+        });
+        root.position.y = 1;
+        root.frontVector = new BABYLON.Vector3(0, 0, 1);
+
+        const playerBoundingBox = BABYLON.MeshBuilder.CreateBox(
+          "playerBoundingBox",
+          { size: 2 },
+          scene
+        );
+        playerBoundingBox.visibility = 0;
+        playerBoundingBox.parent = root;
+        playerBoundingBox.checkCollisions = true;
+
+        return root;
+      };
+
+      const createFollowCamera = function (scene, target) {
+        const camera = new BABYLON.FollowCamera(
+          "followCamera",
+          target.position,
+          scene
+        );
+        camera.radius = 10;
+        camera.heightOffset = 5;
+        camera.rotationOffset = 180;
+        camera.cameraAcceleration = 0.05;
+        camera.maxCameraSpeed = 5;
+        camera.lockedTarget = target;
+        camera.attachControl(canvas, true);
+        return camera;
+      };
+
+      // Add event listeners for mouse movement
+      let isMouseButtonDown = false;
+      canvas.addEventListener("mousedown", (event) => {
+        isMouseButtonDown = true;
+      });
+      canvas.addEventListener("mouseup", (event) => {
+        isMouseButtonDown = false;
+      });
+      canvas.addEventListener("mousemove", (event) => {
+        if (isMouseButtonDown) {
+          const camera = scene.activeCamera;
+          camera.rotationOffset += event.movementX * 0.25;
+
+          // Calculate the new height offset
+          const newHeightOffset = camera.heightOffset - event.movementY * 0.25;
+
+          // Compute the new camera position in world space
+          const alpha = BABYLON.Tools.ToRadians(camera.alpha);
+          const beta = BABYLON.Tools.ToRadians(camera.beta);
+          const target = camera.lockedTarget;
+          const radius = camera.radius;
+          const position = new BABYLON.Vector3(
+            target.x + radius * Math.sin(alpha) * Math.cos(beta),
+            target.y + radius * Math.sin(beta),
+            target.z + radius * Math.cos(alpha) * Math.cos(beta)
+          );
+
+          // Check if the new camera position is above the ground level
+          if (position.y >= 1) {
+            camera.heightOffset = newHeightOffset;
+          }
+        }
+      });
+
+      function createLight(scene) {
+        const light = new BABYLON.HemisphericLight(
+          "light",
+          new BABYLON.Vector3(0, 1, 0),
+          scene
+        );
+        light.intensity = 0.7;
+      }
+
+      function facePlayer(enemy, player) {
+        const direction = player.position.subtract(enemy.position);
+        direction.y = 0;
+        direction.normalize();
+
+        const angle = Math.atan2(direction.x, direction.z);
+        enemy.rotation.y = angle;
+      }
+
+      async function createEnemies(scene) {
+        const scalingFactor = 0.015;
+        const numEnemies = 10;
+
+        const container = await BABYLON.SceneLoader.LoadAssetContainerAsync(
+          "./models/enemies/",
+          "untitled1.glb",
+          scene
+        );
+
+        const root = container.meshes[0];
+        root.scaling = new BABYLON.Vector3(
+          scalingFactor,
+          scalingFactor,
+          scalingFactor
+        );
+
+        const animationGroup = container.animationGroups[0];
+
+        for (let i = 0; i < numEnemies; i++) {
+          const enemy = root.clone("enemy" + i);
+          enemy.position = new BABYLON.Vector3(
+            Math.random() * 40 - 20,
+            1,
+            Math.random() * 40 - 20
+          );
+
+          // Prevent spawning too close to the player
+          while (
+            BABYLON.Vector3.Distance(enemy.position, player.position) < 5
+          ) {
+            enemy.position = new BABYLON.Vector3(
+              Math.random() * 40 - 20,
+              1,
+              Math.random() * 40 - 20
+            );
+          }
+
+          const enemyBoundingBox = BABYLON.MeshBuilder.CreateBox(
+            "enemyBoundingBox" + i,
+            { size: 2 },
+            scene
+          );
+          enemyBoundingBox.visibility = 0;
+          enemyBoundingBox.parent = enemy;
+          enemyBoundingBox.checkCollisions = true;
+
+          // Make the enemy face the player when spawned
+          enemy.lookAt(
+            new BABYLON.Vector3(
+              player.position.x,
+              enemy.position.y,
+              player.position.z
+            )
+          );
+
+          enemy.rotate(
+            BABYLON.Axis.Y,
+            BABYLON.Tools.ToRadians(-60),
+            BABYLON.Space.LOCAL
+          );
+
+          enemies.push(enemy);
+
+          // Clone and reassign the skeleton
+          const clonedSkeleton = container.skeletons[0].clone();
+          enemy.skeleton = clonedSkeleton;
+
+          // Clone the animation group and reassign the targeted animation
+          const clonedAnimationGroup = animationGroup.clone();
+          const targetedAnimation = clonedAnimationGroup.targetedAnimations[0];
+          targetedAnimation.target = clonedSkeleton;
+          clonedAnimationGroup.start(true);
+        }
+      }
+
+      const createScene = function () {
+        const loadingScreen = document.getElementById("loadingScreen");
+        loadingScreen.style.display = "flex";
+
+        const scene = new BABYLON.Scene(engine);
+        createLight(scene);
+        const physicsPlugin = new BABYLON.CannonJSPlugin();
+        scene.enablePhysics(new BABYLON.Vector3(0, -9.81, 0), physicsPlugin);
+        const ground = BABYLON.MeshBuilder.CreateGround(
+          "ground",
+          { width: 100, height: 100 },
+          scene
+        );
+        ground.checkCollisions = true;
+
+        // Create a dummy target for the camera
+        const dummyTarget = new BABYLON.TransformNode("dummyTarget", scene);
+        dummyTarget.position.y = 1;
+
+        // Define the camera before loading the model
+        const followCamera = createFollowCamera(scene, dummyTarget);
+        scene.activeCamera = followCamera;
+
+        // Load the player model
+
+        createPlayer(scene)
+          .then((playerMesh) => {
+            player = playerMesh;
+
+            const followCamera = createFollowCamera(scene, playerMesh);
+            scene.activeCamera = followCamera;
+
+            // Play animation if available
+            if (scene.animationGroups.length > 0) {
+              const animationGroup = scene.animationGroups[0];
+              animationGroup.play(true);
+            }
+          })
+          .catch((error) => {
+            console.error("Error loading player model:", error);
+            return;
+          });
+
+        createEnemies(scene);
+
+        const projectileMaterial = new BABYLON.StandardMaterial(
+          "projectileMaterial",
+          scene
+        );
+        projectileMaterial.diffuseColor = new BABYLON.Color3.Purple();
+
+        window.addEventListener("keydown", function (event) {
+          if (event.key === " ") {
+            const projectile = BABYLON.MeshBuilder.CreateSphere(
+              "projectile",
+              { diameter: 1 },
+              scene
+            );
+            projectile.position = player.position
+              .add(player.frontVector.multiplyByFloats(2, 2, 2))
+              .add(new BABYLON.Vector3(0, 1, 0));
+            projectile.material = projectileMaterial;
+            projectile.direction = new BABYLON.Vector3(
+              player.frontVector.x,
+              0,
+              player.frontVector.z
+            );
+
+            // Add a physics impostor to the projectile
+            projectile.physicsImpostor = new BABYLON.PhysicsImpostor(
+              projectile,
+              BABYLON.PhysicsImpostor.SphereImpostor,
+              { mass: 1, restitution: 0.9 },
+              scene
+            );
+
+            // Apply an impulse to the projectile in the direction it was fired
+            projectile.physicsImpostor.applyImpulse(
+              projectile.direction.scale(30),
+              projectile.getAbsolutePosition()
+            );
+            projectiles.push(projectile);
+          }
+        });
+
+        scene.registerBeforeRender(function () {
+          const moveFactor = 0.1;
+          if (inputStates.up) {
+            player.position.addInPlace(
+              player.frontVector.multiplyByFloats(moveFactor, 0, moveFactor)
+            );
+          }
+
+          if (inputStates.down) {
+            player.position.addInPlace(
+              player.frontVector.multiplyByFloats(-moveFactor, 0, -moveFactor)
+            );
+          }
+
+          if (inputStates.left) {
+            player.rotation.y -= 0.02;
+            player.frontVector = new BABYLON.Vector3(
+              Math.sin(player.rotation.y),
+              0,
+              Math.cos(player.rotation.y)
+            );
+          }
+
+          if (inputStates.right) {
+            player.rotation.y += 0.02;
+            player.frontVector = new BABYLON.Vector3(
+              Math.sin(player.rotation.y),
+              0,
+              Math.cos(player.rotation.y)
+            );
+          }
+
+          for (let i = 0; i < projectiles.length; i++) {
+            const projectile = projectiles[i];
+            projectile.position.addInPlace(
+              projectile.direction.multiplyByFloats(0.5, 0.5, 0.5)
+            );
+
+            // Remove projectile if it's outside the platform bounds
+            if (
+              Math.abs(projectile.position.x) > 50 ||
+              Math.abs(projectile.position.z) > 50
+            ) {
+              projectile.dispose();
+              projectiles.splice(i, 1);
+              i--;
+              continue; // Skip to next iteration
+            }
+
+            // Collision check between projectiles and enemies
+            for (let j = 0; j < enemies.length; j++) {
+              const enemy = enemies[j];
+              if (
+                BABYLON.Vector3.Distance(projectile.position, enemy.position) <=
+                1.5
+              ) {
+                projectile.dispose();
+                projectiles.splice(i, 1);
+                i--;
+
+                enemy.dispose();
+                enemies.splice(j, 1);
+                j--;
+                break;
+              }
+            }
+          }
+
+          const enemyMoveFactor = 0.01;
+          enemies.forEach((enemy) => {
+            const direction = player.position.subtract(enemy.position);
+            direction.y = 0;
+            direction.normalize();
+
+            enemy.position.addInPlace(
+              direction.multiplyByFloats(enemyMoveFactor, 0, enemyMoveFactor)
+            );
+
+            // Rotate the enemy to face the direction they're moving in
+            const lookAtPosition = new BABYLON.Vector3(
+              player.position.x,
+              enemy.position.y,
+              player.position.z
+            );
+            const quat = new BABYLON.Quaternion();
+            BABYLON.Quaternion.RotationYawPitchRollToRef(0, 0, 0, quat);
+            enemy.lookAt(lookAtPosition, 0, quat.toEulerAngles().y, 0);
+
+            // Add the -45 degrees rotation around the Y-axis after the lookAt function
+            enemy.rotate(
+              BABYLON.Axis.Y,
+              BABYLON.Tools.ToRadians(-65),
+              BABYLON.Space.LOCAL
+            );
+          });
+        });
+
+        return scene;
+      };
+      BABYLON.SceneLoader.OnPluginActivatedObservable.addOnce((loader) => {
+        loader.onCompleteObservable.addOnce(() => {
+          loadingScreen.style.display = "none";
+        });
+      });
+
+      (async function () {
+        const scene = await createScene();
+
+        engine.runRenderLoop(function () {
+          scene.render();
+        });
+        window.addEventListener("resize", function () {
+          engine.resize();
+        });
+      })();
+
+      let inputStates = {
+        left: false,
+        right: false,
+        up: false,
+        down: false,
+      };
+
+      window.addEventListener("keydown", function (event) {
+        if (player) {
+          if (event.key === "q" || event.key === "Q") {
+            inputStates.left = true;
+          } else if (event.key === "d" || event.key === "D") {
+            inputStates.right = true;
+          } else if (event.key === "z" || event.key === "Z") {
+            inputStates.up = true;
+          } else if (event.key === "s" || event.key === "S") {
+            inputStates.down = true;
+          }
+        }
+      });
+
+      window.addEventListener("keyup", function (event) {
+        if (player) {
+          if (event.key === "q" || event.key === "Q") {
+            inputStates.left = false;
+          } else if (event.key === "d" || event.key === "D") {
+            inputStates.right = false;
+          } else if (event.key === "z" || event.key === "Z") {
+            inputStates.up = false;
+          } else if (event.key === "s" || event.key === "S") {
+            inputStates.down = false;
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
