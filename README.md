@@ -6,9 +6,14 @@ Our hero alien has come to earth to fight the evil trash mosters that invaded th
 The trash monsters will be throwing trash in the city and trying to hit the alien with the trash. 
 But thanks to the Tree-O-nator that the alien has, he will be able to change the trash monsters into trees ! 
 
+Controls : 
+zqsd for moving
+space for shooting
+
 
 Things added : 
 - loading screen
+- the ability to change camera view with your mouse
 - player model and animations
 - player mouvements
 - player shooting projectiles
