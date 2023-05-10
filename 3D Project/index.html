@@ -54,7 +54,6 @@
           document.getElementById("customLoadingScreenDiv").style.display =
             "initial";
           console.log("reload");
-          // Do not add a loading screen if there is already one
           return;
         }
 
@@ -122,10 +121,9 @@
           scene
         );
         playerBoundingBox.visibility = 0;
-        playerBoundingBox.position = root.position.clone(); // Set the position of the bounding box to match the root node
+        playerBoundingBox.position = root.position.clone(); 
         playerBoundingBox.checkCollisions = true;
 
-        // Add a physics impostor to the player's bounding box
         playerBoundingBox.physicsImpostor = new BABYLON.PhysicsImpostor(
           playerBoundingBox,
           BABYLON.PhysicsImpostor.BoxImpostor,
@@ -150,8 +148,6 @@
         camera.attachControl(canvas, true);
         return camera;
       };
-
-      // Add event listeners for mouse movement
       let isMouseButtonDown = false;
       canvas.addEventListener("mousedown", (event) => {
         isMouseButtonDown = true;
@@ -163,11 +159,8 @@
         if (isMouseButtonDown) {
           const camera = scene.activeCamera;
           camera.rotationOffset += event.movementX * 0.25;
-
-          // Calculate the new height offset
           const newHeightOffset = camera.heightOffset - event.movementY * 0.25;
 
-          // Compute the new camera position in world space
           const alpha = BABYLON.Tools.ToRadians(camera.alpha);
           const beta = BABYLON.Tools.ToRadians(camera.beta);
           const target = camera.lockedTarget;
@@ -177,8 +170,6 @@
             target.y + radius * Math.sin(beta),
             target.z + radius * Math.cos(alpha) * Math.cos(beta)
           );
-
-          // Check if the new camera position is above the ground level
           if (position.y >= 1) {
             camera.heightOffset = newHeightOffset;
           }
@@ -206,8 +197,8 @@
       async function createEnemies(scene) {
         const scalingFactor = 0.015;
         const numEnemies = 15;
-        const spawnRange = 100; // Increase this to make enemies spawn further away
-        const enemySpeed = 1; // Increase this to make enemies faster
+        const spawnRange = 100; 
+        const enemySpeed = 1; 
 
         const container = await BABYLON.SceneLoader.LoadAssetContainerAsync(
           "./models/enemies/",
@@ -232,8 +223,7 @@
             Math.random() * spawnRange - spawnRange / 2
           );
 
-          // Prevent spawning too close to the player
-          while (
+         while (
             BABYLON.Vector3.Distance(enemy.position, player.position) < 10
           ) {
             enemy.position = new BABYLON.Vector3(
@@ -252,8 +242,7 @@
           enemyBoundingBox.parent = enemy;
           enemyBoundingBox.checkCollisions = true;
 
-          // Make the enemy face the player when spawned
-          enemy.lookAt(
+         enemy.lookAt(
             new BABYLON.Vector3(
               player.position.x,
               enemy.position.y,
@@ -269,11 +258,9 @@
 
           enemies.push(enemy);
 
-          // Clone and reassign the skeleton
           const clonedSkeleton = container.skeletons[0].clone();
           enemy.skeleton = clonedSkeleton;
 
-          // Clone the animation group and reassign the targeted animation
           const clonedAnimationGroup = animationGroup.clone();
           const targetedAnimation = clonedAnimationGroup.targetedAnimations[0];
           targetedAnimation.target = clonedSkeleton;
@@ -300,20 +287,18 @@
           );
           const landscape = result.meshes[0];
           landscape.checkCollisions = true;
-          // Adjust the scaling and position if necessary
           landscape.scaling = new BABYLON.Vector3(0.02, 0.02, 0.02);
           landscape.position = new BABYLON.Vector3(0, 0, 0);
           return landscape;
         };
 
-        // Load the landscape model
         const landscape = await loadLandscape(scene);
 
         function getHeightAtPosition(scene, landscape, position) {
           const rayOrigin = position.clone();
-          rayOrigin.y = 100; // A high starting point
+          rayOrigin.y = 100; 
           const rayDirection = new BABYLON.Vector3(0, -1, 0);
-          const rayLength = 200; // Enough length to reach the ground
+          const rayLength = 200; 
           const ray = new BABYLON.Ray(rayOrigin, rayDirection, rayLength);
 
           const hitInfo = scene.pickWithRay(ray, (mesh) => mesh === landscape);
@@ -328,8 +313,6 @@
         // Create a dummy target for the camera
         const dummyTarget = new BABYLON.TransformNode("dummyTarget", scene);
         dummyTarget.position.y = 1;
-
-        // Define the camera before loading the model
         const followCamera = createFollowCamera(scene, dummyTarget);
         scene.activeCamera = followCamera;
 
@@ -342,8 +325,7 @@
             const followCamera = createFollowCamera(scene, playerMesh);
             scene.activeCamera = followCamera;
 
-            // Play animation if available
-            if (scene.animationGroups.length > 0) {
+          if (scene.animationGroups.length > 0) {
               const animationGroup = scene.animationGroups[0];
               animationGroup.play(true);
             }
@@ -379,7 +361,6 @@
               player.frontVector.z
             );
 
-            // Add a physics impostor to the projectile
             projectile.physicsImpostor = new BABYLON.PhysicsImpostor(
               projectile,
               BABYLON.PhysicsImpostor.SphereImpostor,
@@ -387,7 +368,6 @@
               scene
             );
 
-            // Apply an impulse to the projectile in the direction it was fired
             projectile.physicsImpostor.applyImpulse(
               projectile.direction.scale(30),
               projectile.getAbsolutePosition()
@@ -407,7 +387,7 @@
             scene
           );
           trashBagModel = result.meshes[0];
-          trashBagModel.scaling = new BABYLON.Vector3(0.01, 0.01, 0.01); // Adjust the scaling factor as needed
+          trashBagModel.scaling = new BABYLON.Vector3(0.01, 0.01, 0.01);
           trashBagModel.setEnabled(false);
         };
 
@@ -421,7 +401,6 @@
           trashBag.position = position.clone();
           trashBag.direction = direction.clone();
 
-          // Add a physics impostor to the trash bag
           trashBag.physicsImpostor = new BABYLON.PhysicsImpostor(
             trashBag,
             BABYLON.PhysicsImpostor.BoxImpostor,
@@ -433,19 +412,16 @@
             scene
           );
 
-          trashBagModel.scaling = new BABYLON.Vector3(0.01, 0.01, 0.01); // Adjust the scaling factor as needed
+          trashBagModel.scaling = new BABYLON.Vector3(0.01, 0.01, 0.01);
 
-          // Adjust the angle to be a bit higher
           const angleFactor = 0.1;
           trashBag.direction.y += angleFactor;
 
-          // Apply an impulse to the trash bag in the direction it was fired
           trashBag.physicsImpostor.applyImpulse(
             trashBag.direction.scale(30),
             trashBag.getAbsolutePosition()
           );
 
-          // Set up the onCollideEvent for the trash bag's physics impostor
           trashBag.physicsImpostor.onCollideEvent = (collider, collided) => {
             if (collided === landscape.physicsImpostor) {
               trashBag.physicsImpostor.setLinearVelocity(
@@ -457,28 +433,23 @@
             }
           };
 
-          // Set up a ray to check for collisions below the trash bag
           const rayOrigin = trashBag.position.clone();
-          rayOrigin.y += 1; // Slightly above the trash bag's position
+          rayOrigin.y += 1; 
           const rayDirection = new BABYLON.Vector3(0, -1, 0);
-          const rayLength = 5; // The length of the ray, adjust as needed
+          const rayLength = 5; 
           const ray = new BABYLON.Ray(rayOrigin, rayDirection, rayLength);
 
-          // Check for collisions with the landscape
           const hitInfo = scene.pickWithRay(ray, (mesh) => mesh === landscape);
-
-          // If the ray intersects the landscape, set the trash bag's position to the picked point
           if (hitInfo.hit) {
-            trashBag.position.y = hitInfo.pickedPoint.y + 1; // Add some offset to avoid z-fighting
+            trashBag.position.y = hitInfo.pickedPoint.y + 1;
           }
 
           trashBag.physicsImpostor.registerOnPhysicsCollide(
             playerBoundingBox.physicsImpostor,
             () => {
               if (trashBag.canHitPlayer) {
-                // Check if the trash bag can hit the player
+        
                 console.log("hit !");
-                // Reduce player HP when there's a collision with the trash bag
                 playerHP -= 20;
                 hpBar.width = (200 * (playerHP / 100)).toString() + "px";
                 if (playerHP <= 0) {
@@ -495,7 +466,7 @@
                     BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
                   advancedTexture.addControl(gameOverText);
                 }
-                trashBag.canHitPlayer = false; // Set the flag to prevent further collisions with the player
+                trashBag.canHitPlayer = false; 
               }
             }
           );
@@ -588,7 +559,6 @@
 
         scene.registerBeforeRender(function () {
           if (player && playerBoundingBox) {
-            // Update the position of the player's bounding box to follow the player
             playerBoundingBox.position = player.position.clone();
           }
 
@@ -623,7 +593,6 @@
             );
           }
 
-          // Trash bag spawning timer
           trashBagSpawnTimer += scene.getEngine().getDeltaTime();
           if (trashBagSpawnTimer >= 1000 && trashBagModel) {
             const randomEnemyIndex = Math.floor(Math.random() * enemies.length);
@@ -640,9 +609,9 @@
 
           trashBags.forEach((trashBag, index) => {
             const rayOrigin = trashBag.position.clone();
-            rayOrigin.y += 2; // Slightly above the trash bag's position
+            rayOrigin.y += 2; 
             const rayDirection = new BABYLON.Vector3(0, -1, 0);
-            const rayLength = 5; // The length of the ray, adjust as needed
+            const rayLength = 5;
             const ray = new BABYLON.Ray(rayOrigin, rayDirection, rayLength);
 
             const hitInfo = scene.pickWithRay(
@@ -651,7 +620,6 @@
             );
 
             if (hitInfo.hit) {
-              // Set the trash bag's position to the hit point and add a small offset to keep it above the ground
               trashBag.position.y = hitInfo.pickedPoint.y + 0.1;
 
               if (!trashBag.collisionHandled) {
@@ -661,7 +629,7 @@
                 trashBag.physicsImpostor.setAngularVelocity(
                   new BABYLON.Vector3(0, 0, 0)
                 );
-                trashBag.physicsImpostor.mass = 0; // Make the trash bag immovable
+                trashBag.physicsImpostor.mass = 0; 
                 trashBag.collisionHandled = true;
               }
 
@@ -690,12 +658,11 @@
               projectile.direction.multiplyByFloats(0.5, 0.5, 0.5)
             );
 
-            // Remove projectile if it's more than 3 seconds old
             if (now - projectile.creationTime > 3000) {
               projectile.dispose();
               projectiles.splice(i, 1);
               i--;
-              continue; // Skip to next iteration
+              continue; 
             }
 
             // Collision check between projectiles and enemies
@@ -709,7 +676,6 @@
                 projectiles.splice(i, 1);
                 i--;
 
-                // Set enemy isHit to true and remove the projectile
                 enemy.isHit = true;
                 break;
               }
@@ -725,11 +691,11 @@
                 tree.setEnabled(true);
                 tree.position = enemy.position.clone();
                 tree.position.y -= 1; // Adjust the tree Y position so it doesn't go into the ground
-                tree.scaling = new BABYLON.Vector3(1.2, 1.2, 1.2); // Adjust tree scaling as needed
+                tree.scaling = new BABYLON.Vector3(1.2, 1.2, 1.2);
                 enemy.dispose();
                 enemy.isTree = true;
               }
-              return; // Skip the rest of the loop for this enemy
+              return; 
             }
 
             const direction = player.position.subtract(enemy.position);
@@ -739,8 +705,6 @@
             enemy.position.addInPlace(
               direction.multiplyByFloats(enemyMoveFactor, 0, enemyMoveFactor)
             );
-
-            // Rotate the enemy to face the direction they're moving in
             const lookAtPosition = new BABYLON.Vector3(
               player.position.x,
               enemy.position.y,
@@ -749,8 +713,6 @@
             const quat = new BABYLON.Quaternion();
             BABYLON.Quaternion.RotationYawPitchRollToRef(0, 0, 0, quat);
             enemy.lookAt(lookAtPosition, 0, quat.toEulerAngles().y, 0);
-
-            // Add the -45 degrees rotation around the Y-axis after the lookAt function
             enemy.rotate(
               BABYLON.Axis.Y,
               BABYLON.Tools.ToRadians(-65),
