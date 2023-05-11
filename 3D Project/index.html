@@ -93,6 +93,9 @@
       const enemies = [];
       let playerBoundingBox;
 
+      let pollution = 0;
+      const maxPollution = 70;
+
       const createPlayer = async function (scene) {
         const result = await BABYLON.SceneLoader.ImportMeshAsync(
           "",
@@ -121,7 +124,7 @@
           scene
         );
         playerBoundingBox.visibility = 0;
-        playerBoundingBox.position = root.position.clone(); 
+        playerBoundingBox.position = root.position.clone();
         playerBoundingBox.checkCollisions = true;
 
         playerBoundingBox.physicsImpostor = new BABYLON.PhysicsImpostor(
@@ -139,13 +142,14 @@
           target.position,
           scene
         );
-        camera.radius = 10;
-        camera.heightOffset = 5;
+        camera.radius = 15;
+        camera.heightOffset = 7;
         camera.rotationOffset = 180;
         camera.cameraAcceleration = 0.05;
         camera.maxCameraSpeed = 5;
         camera.lockedTarget = target;
         camera.attachControl(canvas, true);
+
         return camera;
       };
       let isMouseButtonDown = false;
@@ -196,9 +200,9 @@
 
       async function createEnemies(scene) {
         const scalingFactor = 0.015;
-        const numEnemies = 15;
-        const spawnRange = 100; 
-        const enemySpeed = 1; 
+        const numEnemies = 20;
+        const spawnRange = 100;
+        const enemySpeed = 1;
 
         const container = await BABYLON.SceneLoader.LoadAssetContainerAsync(
           "./models/enemies/",
@@ -223,7 +227,7 @@
             Math.random() * spawnRange - spawnRange / 2
           );
 
-         while (
+          while (
             BABYLON.Vector3.Distance(enemy.position, player.position) < 10
           ) {
             enemy.position = new BABYLON.Vector3(
@@ -242,7 +246,7 @@
           enemyBoundingBox.parent = enemy;
           enemyBoundingBox.checkCollisions = true;
 
-         enemy.lookAt(
+          enemy.lookAt(
             new BABYLON.Vector3(
               player.position.x,
               enemy.position.y,
@@ -265,7 +269,24 @@
           const targetedAnimation = clonedAnimationGroup.targetedAnimations[0];
           targetedAnimation.target = clonedSkeleton;
           clonedAnimationGroup.start(true);
+          let advancedTexture =
+            BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+
           engine.hideLoadingUI();
+
+          let xyzText = new BABYLON.GUI.TextBlock();
+          xyzText.text =
+            "ZQSD to move\nSPACE to shoot\neliminate all the trash monsters before the pollution meter fills up !\n you can decrease the pollution meter by turning them into trees\ndont get hit with their trash !";
+          xyzText.color = "white";
+          xyzText.fontSize = 24;
+          xyzText.textHorizontalAlignment =
+            BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+          xyzText.textVerticalAlignment =
+            BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+          advancedTexture.addControl(xyzText);
+          setTimeout(() => {
+            advancedTexture.removeControl(xyzText);
+          }, 5000);
         }
       }
 
@@ -277,6 +298,46 @@
         createLight(scene);
         const physicsPlugin = new BABYLON.CannonJSPlugin();
         scene.enablePhysics(new BABYLON.Vector3(0, -9.81, 0), physicsPlugin);
+
+        var theme = new BABYLON.Sound(
+          "theme",
+          "./music/theme.mp3",
+          scene,
+          soundReady,
+          { loop: true, volume: 0.3 }
+        );
+
+        let gameOverSound = new BABYLON.Sound(
+          "GameOver",
+          "./music/gameover.mp3",
+          scene,
+          { volume: 0.3 }
+        );
+
+        let TreeSound = new BABYLON.Sound(
+          "Tree",
+          "./music/tree_pop.mp3",
+          scene,
+          { volume: 0.3 }
+        );
+
+        let hit = new BABYLON.Sound("hit", "./music/hit.mp3", scene, {
+          volume: 0.3,
+        });
+
+        let winningSound = new BABYLON.Sound(
+          "Winning",
+          "./music/winning.mp3",
+          scene,
+          null,
+          {
+            volume: 0.05,
+          }
+        );
+
+        function soundReady() {
+          theme.play();
+        }
 
         const loadLandscape = async (scene) => {
           const result = await BABYLON.SceneLoader.ImportMeshAsync(
@@ -292,13 +353,34 @@
           return landscape;
         };
 
+        function createSkybox(scene) {
+          const skybox = BABYLON.MeshBuilder.CreateBox(
+            "skyBox",
+            { size: 1000.0 },
+            scene
+          );
+          const skyboxMaterial = new BABYLON.StandardMaterial("skyBox", scene);
+          skyboxMaterial.backFaceCulling = false;
+          skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture(
+            "./models/skybox/skybox",
+            scene
+          );
+          skyboxMaterial.reflectionTexture.coordinatesMode =
+            BABYLON.Texture.SKYBOX_MODE;
+          skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
+          skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+          skybox.material = skyboxMaterial;
+          return skybox;
+        }
+
         const landscape = await loadLandscape(scene);
+        const skybox = createSkybox(scene);
 
         function getHeightAtPosition(scene, landscape, position) {
           const rayOrigin = position.clone();
-          rayOrigin.y = 100; 
+          rayOrigin.y = 100;
           const rayDirection = new BABYLON.Vector3(0, -1, 0);
-          const rayLength = 200; 
+          const rayLength = 200;
           const ray = new BABYLON.Ray(rayOrigin, rayDirection, rayLength);
 
           const hitInfo = scene.pickWithRay(ray, (mesh) => mesh === landscape);
@@ -325,7 +407,7 @@
             const followCamera = createFollowCamera(scene, playerMesh);
             scene.activeCamera = followCamera;
 
-          if (scene.animationGroups.length > 0) {
+            if (scene.animationGroups.length > 0) {
               const animationGroup = scene.animationGroups[0];
               animationGroup.play(true);
             }
@@ -411,7 +493,8 @@
             },
             scene
           );
-
+          pollution++;
+          pollutionBarInner.width = (pollution / maxPollution) * 220 + "px";
           trashBagModel.scaling = new BABYLON.Vector3(0.01, 0.01, 0.01);
 
           const angleFactor = 0.1;
@@ -434,9 +517,9 @@
           };
 
           const rayOrigin = trashBag.position.clone();
-          rayOrigin.y += 1; 
+          rayOrigin.y += 1;
           const rayDirection = new BABYLON.Vector3(0, -1, 0);
-          const rayLength = 5; 
+          const rayLength = 5;
           const ray = new BABYLON.Ray(rayOrigin, rayDirection, rayLength);
 
           const hitInfo = scene.pickWithRay(ray, (mesh) => mesh === landscape);
@@ -448,16 +531,20 @@
             playerBoundingBox.physicsImpostor,
             () => {
               if (trashBag.canHitPlayer) {
-        
                 console.log("hit !");
+                hit.play();
                 playerHP -= 20;
                 hpBar.width = (200 * (playerHP / 100)).toString() + "px";
                 if (playerHP <= 0) {
+                  theme.pause();
+                  gameOverSound.play();
+                  gameActive = false;
+
                   hpBar.background = "red";
                   console.log("dead !");
-                  gameActive = false;
                   const gameOverText = new BABYLON.GUI.TextBlock();
-                  gameOverText.text = "GAME OVER";
+                  gameOverText.text =
+                    "GAME OVER\n you got hit with too many trash";
                   gameOverText.color = "red";
                   gameOverText.fontSize = 48;
                   gameOverText.verticalAlignment =
@@ -466,7 +553,7 @@
                     BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
                   advancedTexture.addControl(gameOverText);
                 }
-                trashBag.canHitPlayer = false; 
+                trashBag.canHitPlayer = false;
               }
             }
           );
@@ -485,62 +572,122 @@
 
           trashBag.canHitPlayer = true;
           trashBags.push(trashBag);
+
+          if (pollution >= maxPollution) {
+            theme.pause();
+            gameOverSound.play();
+            gameActive = false;
+
+            hpBar.background = "red";
+            console.log("dead !");
+            const gameOverText = new BABYLON.GUI.TextBlock();
+            gameOverText.text = "GAME OVER\n the monsters polluted the city";
+            gameOverText.color = "red";
+            gameOverText.fontSize = 48;
+            gameOverText.verticalAlignment =
+              BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER;
+            gameOverText.horizontalAlignment =
+              BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+            advancedTexture.addControl(gameOverText);
+          }
         };
 
         const advancedTexture =
           BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
 
-        const hpBarBorder = new BABYLON.GUI.Rectangle("hpBarBorder");
-        hpBarBorder.width = "204px";
-        hpBarBorder.height = "62px";
-        hpBarBorder.cornerRadius = 5;
-        hpBarBorder.color = "white";
-        hpBarBorder.thickness = 2;
-        hpBarBorder.background = "transparent";
-        hpBarBorder.top = "50px";
-        hpBarBorder.left = "10px";
-        hpBarBorder.horizontalAlignment =
-          BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
-        hpBarBorder.verticalAlignment =
-          BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        let text1 = new BABYLON.GUI.TextBlock();
+        text1.text = "You Protected the city!";
+        text1.color = "green";
+        text1.fontSize = 70;
+        text1.isVisible = false;
+        advancedTexture.addControl(text1);
 
-        const hpBarLabel = new BABYLON.GUI.TextBlock();
+        let hpBarLabel = new BABYLON.GUI.TextBlock();
         hpBarLabel.text = "Health";
         hpBarLabel.color = "white";
-        hpBarLabel.fontSize = 16;
-        hpBarLabel.top = "-20px";
-        hpBarLabel.horizontalAlignment =
-          BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
-        hpBarBorder.addControl(hpBarLabel);
+        hpBarLabel.fontSize = 24;
+        hpBarLabel.textHorizontalAlignment =
+          BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        hpBarLabel.textVerticalAlignment =
+          BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        hpBarLabel.paddingTop = "10px";
+        hpBarLabel.paddingLeft = "10px";
+        advancedTexture.addControl(hpBarLabel);
 
-        const hpBar = new BABYLON.GUI.Rectangle("hpBar");
-        hpBar.width = "200px";
+        let hpBarContainer = new BABYLON.GUI.StackPanel();
+        hpBarContainer.width = "220px";
+        hpBarContainer.height = "20px";
+        hpBarContainer.isVertical = false;
+        hpBarContainer.top = "50px";
+        hpBarContainer.left = "10px";
+        hpBarContainer.horizontalAlignment =
+          BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        hpBarContainer.verticalAlignment =
+          BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        advancedTexture.addControl(hpBarContainer);
+
+        let hpBar = new BABYLON.GUI.Rectangle();
+        hpBar.width = "1";
         hpBar.height = "20px";
-        hpBar.cornerRadius = 5;
-        hpBar.color = "transparent";
+        hpBar.cornerRadius = 20;
+        hpBar.color = "white";
         hpBar.thickness = 0;
         hpBar.background = "green";
         hpBar.horizontalAlignment =
           BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
-        hpBar.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER;
-
-        const hpBarContainer = new BABYLON.GUI.Rectangle("hpBarContainer");
-        hpBarContainer.width = "200px";
-        hpBarContainer.height = "20px";
-        hpBarContainer.cornerRadius = 5;
-        hpBarContainer.color = "white";
-        hpBarContainer.thickness = 2;
-        hpBarContainer.background = "transparent";
-        hpBarContainer.horizontalAlignment =
-          BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
-        hpBarContainer.verticalAlignment =
-          BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER;
-
-        advancedTexture.addControl(hpBarBorder);
-        hpBarBorder.addControl(hpBarContainer);
         hpBarContainer.addControl(hpBar);
 
+        let hpBarBorder = new BABYLON.GUI.Rectangle();
+        hpBarBorder.width = "220px";
+        hpBarBorder.height = "20px";
+        hpBarBorder.cornerRadius = 20;
+        hpBarBorder.color = "white";
+        hpBarBorder.thickness = 4;
+        hpBarBorder.background = "transparent";
+        hpBarBorder.horizontalAlignment =
+          BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        hpBarBorder.verticalAlignment =
+          BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        hpBarBorder.top = "50px";
+        hpBarBorder.left = "10px";
+        advancedTexture.addControl(hpBarBorder);
+
         let playerHP = 100;
+
+        let pollutionText = new BABYLON.GUI.TextBlock();
+        pollutionText.text = "Pollution Meter";
+        pollutionText.color = "white";
+        pollutionText.fontSize = 24;
+        pollutionText.textHorizontalAlignment =
+          BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
+        pollutionText.textVerticalAlignment =
+          BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        pollutionText.paddingTop = "10px";
+        pollutionText.paddingLeft = "10px";
+        advancedTexture.addControl(pollutionText);
+
+        let pollutionBar = new BABYLON.GUI.Rectangle();
+        pollutionBar.width = "220px";
+        pollutionBar.height = "20px";
+        pollutionBar.cornerRadius = 20;
+        pollutionBar.color = "white";
+        pollutionBar.thickness = 4;
+        pollutionBar.background = "green";
+        pollutionBar.horizontalAlignment =
+          BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
+        pollutionBar.verticalAlignment =
+          BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        pollutionBar.top = "50px";
+        advancedTexture.addControl(pollutionBar);
+
+        let pollutionBarInner = new BABYLON.GUI.Rectangle();
+        pollutionBarInner.width = "0px";
+        pollutionBarInner.height = "20px";
+        pollutionBarInner.cornerRadius = 20;
+        pollutionBarInner.color = "white";
+        pollutionBarInner.thickness = 0;
+        pollutionBarInner.background = "red";
+        pollutionBar.addControl(pollutionBarInner);
 
         let treeTemplate;
         const loadTreeModel = async () => {
@@ -595,10 +742,15 @@
 
           trashBagSpawnTimer += scene.getEngine().getDeltaTime();
           if (trashBagSpawnTimer >= 1000 && trashBagModel) {
-            const randomEnemyIndex = Math.floor(Math.random() * enemies.length);
-            const randomEnemy = enemies[randomEnemyIndex];
+            let randomEnemyIndex = Math.floor(Math.random() * enemies.length);
+            let randomEnemy = enemies[randomEnemyIndex];
 
-            if (randomEnemy && !randomEnemy.isTree) {
+            while (randomEnemy && randomEnemy.isTree) {
+              randomEnemyIndex = Math.floor(Math.random() * enemies.length);
+              randomEnemy = enemies[randomEnemyIndex];
+            }
+
+            if (randomEnemy) {
               const direction = player.position
                 .subtract(randomEnemy.position)
                 .normalize();
@@ -609,7 +761,7 @@
 
           trashBags.forEach((trashBag, index) => {
             const rayOrigin = trashBag.position.clone();
-            rayOrigin.y += 2; 
+            rayOrigin.y += 2;
             const rayDirection = new BABYLON.Vector3(0, -1, 0);
             const rayLength = 5;
             const ray = new BABYLON.Ray(rayOrigin, rayDirection, rayLength);
@@ -629,7 +781,7 @@
                 trashBag.physicsImpostor.setAngularVelocity(
                   new BABYLON.Vector3(0, 0, 0)
                 );
-                trashBag.physicsImpostor.mass = 0; 
+                trashBag.physicsImpostor.mass = 0;
                 trashBag.collisionHandled = true;
               }
 
@@ -662,7 +814,7 @@
               projectile.dispose();
               projectiles.splice(i, 1);
               i--;
-              continue; 
+              continue;
             }
 
             // Collision check between projectiles and enemies
@@ -682,20 +834,27 @@
             }
           }
 
-          const enemyMoveFactor = 0.01;
+          const enemyMoveFactor = 0.03;
           enemies.forEach((enemy) => {
-            // If enemy is hit, turn into a tree and stop movement
             if (enemy.isHit) {
               if (!enemy.isTree) {
                 const tree = treeTemplate.clone();
+                TreeSound.play();
+                pollution--;
                 tree.setEnabled(true);
                 tree.position = enemy.position.clone();
-                tree.position.y -= 1; // Adjust the tree Y position so it doesn't go into the ground
+                tree.position.y -= 1;
                 tree.scaling = new BABYLON.Vector3(1.2, 1.2, 1.2);
                 enemy.dispose();
                 enemy.isTree = true;
               }
-              return; 
+              if (enemies.every((enemy) => enemy.isTree)) {
+                winningSound.play();
+                gameActive = false;
+                theme.pause();
+                text1.isVisible = true;
+              }
+              return;
             }
 
             const direction = player.position.subtract(enemy.position);
@@ -778,3 +937,4 @@
     </script>
   </body>
 </html>
+
